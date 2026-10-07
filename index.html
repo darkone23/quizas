@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quizas — grid quizzes for curious people</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site">
+    <h1>Quizas 🧭</h1>
+    <p class="tagline">Answer questions, land on a grid, meet your match.</p>
+  </header>
+  <main class="wrap">
+    <div id="shelf"></div>
+  </main>
+  <footer class="site">
+    Add your own quiz — see <a href="docs/FORMAT.md">the authoring guide</a>.
+    Code lives at <a href="https://github.com/darkone23/quizas">darkone23/quizas</a>.
+  </footer>
+  <script src="assets/quizas.js"></script>
+  <script src="data/registry.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const shelf = document.getElementById('shelf');
+      const list = window.QUIZAS_REGISTRY || [];
+      shelf.innerHTML = list.map(function (q) {
+        return '<a class="quiz-card" href="quiz.html?quiz=' + encodeURIComponent(q.id) + '">' +
+          '<span class="emoji">' + q.emoji + '</span>' +
+          '<h2>' + q.title + '</h2>' +
+          '<p>' + q.blurb + '</p>' +
+          '<span class="go">Take the quiz →</span></a>';
+      }).join('');
+    })();
+  </script>
+</body>
+</html>

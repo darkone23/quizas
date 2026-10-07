@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quizas — taking the quiz</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site">
+    <h1>Quizas 🧭</h1>
+  </header>
+  <main class="wrap">
+    <div class="card" id="runner">
+      <p>⏳ Loading the quiz…</p>
+    </div>
+  </main>
+  <footer class="site">
+    <a href="index.html">← All quizzes</a>
+  </footer>
+  <script src="assets/quizas.js"></script>
+  <script src="data/registry.js"></script>
+  <script src="assets/pages.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const runner = document.getElementById('runner');
+      QuizPages.loadQuiz(function (quiz) {
+        if (!quiz) { QuizPages.renderError('Quiz not found — check the link.'); return; }
+        document.title = 'Quizas — ' + quiz.title;
+
+        const storeKey = 'quizas.answers.' + quiz.id;
+        let answers = quiz.questions.map(function () { return null; });
+        let index = 0;
+
+        const saved = sessionStorage.getItem(storeKey);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed) && parsed.length === quiz.questions.length &&
+                parsed.every(function (a) { return a === null || (Number.isInteger(a) && a >= 0 && a < quiz.likert.length); })) {
+              answers = parsed;
+              index = parsed.findIndex(function (a) { return a === null; });
+              if (index === -1) index = parsed.length - 1;
+            }
+          } catch (e) { sessionStorage.removeItem(storeKey); }
+        }
+
+        function persist() { sessionStorage.setItem(storeKey, JSON.stringify(answers)); }
+
+        function render() {
+          const total = quiz.questions.length;
+          const done = answers.filter(function (a) { return a !== null; }).length;
+          const pct = Math.round((done / total) * 100);
+          const q = quiz.questions[index];
+          runner.innerHTML =
+            '<div class="progress"><span>' + (index + 1) + ' / ' + total + '</span>' +
+            '<div class="bar"><span style="width:' + pct + '%"></span></div></div>' +
+            '<div class="question-text">' + q.text + '</div>' +
+            '<div class="likert">' + quiz.likert.map(function (label, i) {
+              const cls = ['sd', 'd', 'n', 'a', 'sa'][i] || 'n';
+              return '<button type="button" data-i="' + i + '" class="' + cls + '">' +
+                '<span class="num">' + (i + 1) + '</span>' + label + '</button>';
+            }).join('') + '</div>' +
+            '<div class="scale-ends"><span>' + quiz.likert[0] + '</span><span>' + quiz.likert[quiz.likert.length - 1] + '</span></div>' +
+            '<div class="controls">' +
+            '<button type="button" class="linklike" id="back"' + (index === 0 ? ' disabled' : '') + '>← Back</button>' +
+            '<button type="button" class="linklike" id="restart">Start over</button>' +
+            '</div>' +
+            '<p class="hint">Tip: press 1–' + quiz.likert.length + ' to answer, Backspace to go back.</p>';
+
+          runner.querySelectorAll('.likert button').forEach(function (btn) {
+            btn.addEventListener('click', function () { answer(parseInt(btn.dataset.i, 10)); });
+          });
+          runner.querySelector('#back').addEventListener('click', back);
+          runner.querySelector('#restart').addEventListener('click', restart);
+        }
+
+        function answer(i) {
+          answers[index] = i;
+          persist();
+          if (index === quiz.questions.length - 1) {
+            const encoded = QUIZAS.encodeAnswers(quiz, answers);
+            if (encoded === null) { QuizPages.renderError('Something went wrong scoring the quiz.'); return; }
+            sessionStorage.removeItem(storeKey);
+            location.href = 'results.html?quiz=' + encodeURIComponent(quiz.id) + '&a=' + encoded;
+            return;
+          }
+          index++;
+          render();
+        }
+
+        function back() {
+          if (index === 0) return;
+          index--;
+          answers[index] = null;
+          persist();
+          render();
+        }
+
+        function restart() {
+          answers = quiz.questions.map(function () { return null; });
+          index = 0;
+          persist();
+          render();
+        }
+
+        document.addEventListener('keydown', function (ev) {
+          if (ev.key >= '1' && ev.key <= String(quiz.likert.length)) {
+            answer(parseInt(ev.key, 10) - 1);
+          } else if (ev.key === 'Backspace') {
+            ev.preventDefault();
+            back();
+          }
+        });
+
+        render();
+      });
+    })();
+  </script>
+</body>
+</html>

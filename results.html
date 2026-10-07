@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quizas — your result</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="site">
+    <h1>Quizas 🧭</h1>
+  </header>
+  <main class="wrap">
+    <div class="card" id="results">
+      <p>⏳ Working out where you landed…</p>
+    </div>
+  </main>
+  <footer class="site">
+    <a href="index.html">← All quizzes</a>
+  </footer>
+  <script src="assets/quizas.js"></script>
+  <script src="data/registry.js"></script>
+  <script src="assets/pages.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+  <script>
+    (function () {
+      'use strict';
+      const box = document.getElementById('results');
+      QuizPages.loadQuiz(function (quiz) {
+        if (!quiz) { QuizPages.renderError('Quiz not found — check the link.'); return; }
+        const encoded = QuizPages.getParam('a');
+        const answers = encoded === null ? null : QUIZAS.decodeAnswers(quiz, encoded);
+        if (!answers) { QuizPages.renderError('That share link looks broken — retake the quiz instead.', false); return; }
+        document.title = 'Quizas — ' + quiz.title + ' result';
+
+        const axes = quiz.axes; // [x, y]
+        const point = QUIZAS.score(quiz, answers);
+        const ranked = QUIZAS.nearest(quiz, point);
+        const [xAxis, yAxis] = axes;
+        const winner = ranked[0];
+        const runners = ranked.slice(1, 3);
+        const shareUrl = location.href;
+
+        box.innerHTML =
+          '<div class="match-hero">' +
+          '<p class="lead-in">' + quiz.title + '</p>' +
+          '<span class="figure-emoji">' + winner.figure.emoji + '</span>' +
+          '<h2>You are most like ' + winner.figure.name + '</h2>' +
+          '<p class="blurb">' + winner.figure.blurb + '</p>' +
+          '</div>' +
+          '<div class="chart-frame">' +
+          '<span class="axis-label x-left">' + xAxis.left + '</span>' +
+          '<span class="axis-label x-right">' + xAxis.right + '</span>' +
+          '<span class="axis-label y-top">' + yAxis.top + '</span>' +
+          '<span class="axis-label y-bottom">' + yAxis.bottom + '</span>' +
+          '<div id="chart"></div>' +
+          '</div>' +
+          '<div class="runners"><h3>Runner-ups</h3>' + runners.map(function (r, i) {
+            return '<div class="runner"><span class="emoji">' + r.figure.emoji + '</span>' +
+              '<div><b>' + (i === 0 ? 'Second' : 'Third') + ': ' + r.figure.name + '</b><br><span>' + r.figure.blurb + '</span></div></div>';
+          }).join('') + '</div>' +
+          '<div class="actions">' +
+          '<button type="button" class="button" id="share">🔗 Copy result link</button>' +
+          '<a class="button secondary" href="quiz.html?quiz=' + encodeURIComponent(quiz.id) + '">↺ Retake</a>' +
+          '</div>' +
+          '<p class="notice" id="notice"></p>';
+
+        renderChart(quiz, axes, point, winner.figure.id);
+
+        const notice = document.getElementById('notice');
+        document.getElementById('share').addEventListener('click', function () {
+          function done() {
+            notice.textContent = 'Link copied — send it to a friend and compare grids.';
+            notice.classList.add('show');
+          }
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(shareUrl).then(done, function () { fallbackCopy(shareUrl, done); });
+          } else {
+            fallbackCopy(shareUrl, done);
+          }
+        });
+      });
+
+      function fallbackCopy(text, done) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) { /* clipboard unavailable */ }
+        document.body.removeChild(ta);
+      }
+
+      function renderChart(quiz, axes, point, winnerId) {
+        const xId = axes[0].id, yId = axes[1].id;
+        const chart = echarts.init(document.getElementById('chart'));
+        const EXT = 1.18;
+
+        const quadrants = [
+          { corners: [{ xAxis: 0, yAxis: 0, itemStyle: { color: 'rgba(179, 84, 30, 0.07)' } }, { xAxis: EXT, yAxis: EXT }] },
+          { corners: [{ xAxis: -EXT, yAxis: 0, itemStyle: { color: 'rgba(61, 126, 166, 0.06)' } }, { xAxis: 0, yAxis: EXT }] },
+          { corners: [{ xAxis: 0, yAxis: -EXT, itemStyle: { color: 'rgba(74, 125, 82, 0.06)' } }, { xAxis: EXT, yAxis: 0 }] },
+          { corners: [{ xAxis: -EXT, yAxis: -EXT, itemStyle: { color: 'rgba(179, 84, 30, 0.03)' } }, { xAxis: 0, yAxis: 0 }] },
+        ];
+
+        chart.setOption({
+          animationDuration: 600,
+          grid: { left: 14, right: 14, top: 14, bottom: 14 },
+          xAxis: { min: -EXT, max: EXT, type: 'value', axisLabel: { show: false }, splitLine: { show: true, lineStyle: { color: '#e8e0d4' } }, axisLine: { show: false }, axisTick: { show: false } },
+          yAxis: { min: -EXT, max: EXT, type: 'value', axisLabel: { show: false }, splitLine: { show: true, lineStyle: { color: '#e8e0d4' } }, axisLine: { show: false }, axisTick: { show: false } },
+          series: [
+            {
+              type: 'scatter',
+              data: [],
+              symbolSize: 0,
+              silent: true,
+              markArea: { silent: true, data: quadrants.map(function (q) { return q.corners; }) },
+            },
+            {
+              name: 'figures',
+              type: 'scatter',
+              symbolSize: 15,
+              itemStyle: { color: 'rgba(122, 112, 98, 0.85)', borderColor: '#faf7f2', borderWidth: 1 },
+              label: {
+                show: true,
+                position: 'top',
+                fontSize: 11,
+                color: '#2b2620',
+                formatter: function (p) { return p.data.emoji + ' ' + p.data.name; },
+              },
+              labelLayout: { hideOverlap: true },
+              emphasis: { label: { show: true, fontWeight: 'bold' } },
+              tooltip: {
+                formatter: function (p) { return '<b>' + p.data.name + '</b><br>' + p.data.blurb; },
+              },
+              data: quiz.figures.map(function (f) {
+                return {
+                  value: [f.pos[xId], f.pos[yId]],
+                  name: f.name,
+                  emoji: f.emoji,
+                  blurb: f.blurb,
+                  id: f.id,
+                  itemStyle: f.id === winnerId ? { color: '#b3541e', borderColor: '#faf7f2' } : undefined,
+                  symbolSize: f.id === winnerId ? 20 : 15,
+                };
+              }),
+            },
+            {
+              name: 'you',
+              type: 'scatter',
+              symbol: 'pin',
+              symbolSize: 46,
+              z: 10,
+              itemStyle: { color: '#c0392b' },
+              label: { show: true, formatter: 'You', color: '#fff', fontSize: 10, position: 'inside' },
+              tooltip: {
+                formatter: function (p) {
+                  return '<b>Your grid position</b><br>' + axes[0].left + ' ↔ ' + axes[0].right + ': ' + point[xId].toFixed(2) +
+                    '<br>' + axes[1].bottom + ' ↔ ' + axes[1].top + ': ' + point[yId].toFixed(2);
+                },
+              },
+              data: [{ value: [point[xId], point[yId]] }],
+            },
+          ],
+        });
+
+        window.addEventListener('resize', chart.resize);
+      }
+    })();
+  </script>
+</body>
+</html>
